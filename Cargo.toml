@@ -8,3 +8,4 @@ license = "MIT"
 
 [dependencies]
 byteorder = { version = "0.5", features = [] }
+rustc-serialize = "0.3.*"

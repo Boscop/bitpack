@@ -1,17 +1,62 @@
-#![no_std]
-
 extern crate byteorder;
 
 use byteorder::{ LittleEndian, ByteOrder };
 
+extern crate rustc_serialize;
 
-#[derive(Debug, PartialEq, Eq)]
+
+#[derive(Debug, PartialEq, Eq, RustcEncodable, RustcDecodable)]
 pub struct BitPack<B> {
     pub buff: B,
     pub cursor: usize,
     pub bits_left: usize,
     pub bits_buf: u32,
     pub bits: usize
+}
+
+impl BitPack<Vec<u8>> {
+    pub fn new(buff: Vec<u8>) -> BitPack<Vec<u8>> {
+        assert_eq!(buff.len() % 4, 0);
+        BitPack {
+            buff: buff,
+            bits_left: 32,
+            bits_buf: 0,
+            bits: 0,
+            cursor: 0
+        }
+    }
+
+    pub fn write(&mut self, mut value: u32, mut bits: usize) -> Result<(), ()> {
+        if bits > 32 { return Err(()) };
+        if bits < 32 {
+            value &= (1 << bits) - 1;
+        }
+        if self.buff.len() * 8 < self.bits + bits { return Err(()) };
+        self.bits += bits;
+
+        loop {
+            if bits <= self.bits_left {
+                self.bits_buf |= value << (self.bits_left - bits);
+                self.bits_left -= bits;
+                break
+            }
+
+            self.bits_buf |= value >> (bits - self.bits_left);
+            value &= (1 << (bits - self.bits_left)) - 1;
+            bits -= self.bits_left;
+
+            self.flush();
+        }
+
+        Ok(())
+    }
+
+    pub fn flush(&mut self) {
+        LittleEndian::write_u32(&mut self.buff[self.cursor..], self.bits_buf);
+        self.cursor += 4;
+        self.bits_buf = 0;
+        self.bits_left = 32;
+    }
 }
 
 impl<'a> BitPack<&'a mut [u8]> {
